@@ -6,10 +6,13 @@ import AvailabilityLib "../lib/availability";
 
 mixin (
   getAdminPrincipal : () -> Principal,
+  autoInitAdmin : Principal -> (),
   rules : List.List<AvailabilityTypes.AvailabilityRule>,
   blockedDates : List.List<AvailabilityTypes.BlockedDate>,
 ) {
   func requireAdminAvailability(caller : Principal) {
+    // Auto-initialize admin on first call if still anonymous
+    autoInitAdmin(caller);
     if (not Principal.equal(caller, getAdminPrincipal())) {
       Runtime.trap("Unauthorized: admin only");
     };

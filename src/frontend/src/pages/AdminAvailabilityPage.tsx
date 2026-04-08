@@ -1,25 +1,17 @@
 import {
-  AlertTriangle,
+  AlertCircle,
   CalendarX,
+  CheckCircle2,
   Clock,
   MapPin,
   Monitor,
   Plus,
+  Save,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AdminLayout } from "../components/AdminLayout";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "../components/ui/alert-dialog";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
@@ -40,6 +32,7 @@ import {
   useBlockedDates,
   useCreateRule,
   useDeleteRule,
+  useIsActorReady,
   useRemoveBlockedDate,
 } from "../hooks/useBackend";
 import type { MeetingType } from "../types";
@@ -52,7 +45,7 @@ const SLOT_DURATIONS = [
   { label: "60 min", value: 60 },
 ];
 
-// ── Rule Add Form (inline panel) ───────────────────────────────────────────────
+// ── Rule Add Form ──────────────────────────────────────────────────────────────
 
 interface RuleFormValues {
   dayOfWeek: string;
@@ -72,7 +65,9 @@ const DEFAULT_RULE: RuleFormValues = {
 
 function RuleAddPanel({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState<RuleFormValues>(DEFAULT_RULE);
-  const { mutate, isPending } = useCreateRule();
+  const [saved, setSaved] = useState(false);
+  const { mutate, isPending, isError, error } = useCreateRule();
+  const { isReady, isFetching } = useIsActorReady();
 
   function toggleType(t: MeetingType) {
     setForm((f) => ({
@@ -85,6 +80,14 @@ function RuleAddPanel({ onClose }: { onClose: () => void }) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSaved(false);
+
+    if (!isReady) {
+      toast.error(
+        "Backend is still connecting. Please wait a moment and try again.",
+      );
+      return;
+    }
     if (!form.dayOfWeek) {
       toast.error("Please select a day of week.");
       return;
@@ -97,6 +100,7 @@ function RuleAddPanel({ onClose }: { onClose: () => void }) {
       toast.error("Select at least one meeting type.");
       return;
     }
+
     mutate(
       {
         dayOfWeek: Number(form.dayOfWeek),
@@ -107,168 +111,266 @@ function RuleAddPanel({ onClose }: { onClose: () => void }) {
       },
       {
         onSuccess: () => {
-          toast.success("Availability rule added.");
-          onClose();
+          setSaved(true);
+          toast.success("Availability rule saved successfully!");
+          setTimeout(() => {
+            onClose();
+          }, 800);
         },
-        onError: () => toast.error("Failed to add rule. Please try again."),
+        onError: (err) => {
+          console.error("Failed to add rule:", err);
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : "Failed to save rule. Please try again.",
+          );
+        },
       },
     );
   }
 
-  return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-accent/5 border border-accent/30 rounded-xl p-5 mb-4 space-y-4 animate-slide-up"
-    >
-      <p className="font-display font-semibold text-foreground text-sm">
-        New Availability Rule
-      </p>
+  const isBackendBusy = isFetching && !isReady;
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Day */}
-        <div className="space-y-1.5">
-          <Label htmlFor="rule-day">Day of Week</Label>
-          <Select
-            value={form.dayOfWeek}
-            onValueChange={(v) => setForm((f) => ({ ...f, dayOfWeek: v }))}
-          >
-            <SelectTrigger id="rule-day" data-ocid="rule-day-select">
-              <SelectValue placeholder="Select day…" />
-            </SelectTrigger>
-            <SelectContent>
-              {DAYS.map((day, i) => (
-                <SelectItem key={day} value={String(i)}>
-                  {day}
-                </SelectItem>
+  return (
+    <div className="bg-card border-2 border-primary/40 rounded-xl overflow-hidden shadow-lg mb-4">
+      {/* Form header bar */}
+      <div className="bg-primary/10 px-5 py-3.5 border-b border-primary/20 flex items-center justify-between">
+        <p className="font-display font-semibold text-foreground text-sm flex items-center gap-2">
+          <Plus className="h-4 w-4 text-primary" />
+          New Availability Rule
+        </p>
+        {isBackendBusy && (
+          <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+            Connecting to backend…
+          </span>
+        )}
+        {isReady && (
+          <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            Ready
+          </span>
+        )}
+      </div>
+
+      <form onSubmit={handleSubmit} className="p-5 space-y-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Day */}
+          <div className="space-y-1.5">
+            <Label htmlFor="rule-day">Day of Week *</Label>
+            <Select
+              value={form.dayOfWeek}
+              onValueChange={(v) => setForm((f) => ({ ...f, dayOfWeek: v }))}
+            >
+              <SelectTrigger id="rule-day" data-ocid="rule-day-select">
+                <SelectValue placeholder="Select day…" />
+              </SelectTrigger>
+              <SelectContent>
+                {DAYS.map((day, i) => (
+                  <SelectItem key={day} value={String(i)}>
+                    {day}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Slot duration */}
+          <div className="space-y-1.5">
+            <Label>Slot Duration</Label>
+            <div className="flex gap-2">
+              {SLOT_DURATIONS.map(({ label, value }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() =>
+                    setForm((f) => ({ ...f, slotDurationMinutes: value }))
+                  }
+                  data-ocid={`duration-${value}`}
+                  className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-smooth ${
+                    form.slotDurationMinutes === value
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-background text-foreground hover:border-primary/60"
+                  }`}
+                >
+                  {label}
+                </button>
               ))}
-            </SelectContent>
-          </Select>
+            </div>
+          </div>
+
+          {/* Start */}
+          <div className="space-y-1.5">
+            <Label htmlFor="rule-start">Start Time</Label>
+            <Input
+              id="rule-start"
+              type="time"
+              value={form.startTime}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, startTime: e.target.value }))
+              }
+              data-ocid="rule-start-input"
+            />
+          </div>
+
+          {/* End */}
+          <div className="space-y-1.5">
+            <Label htmlFor="rule-end">End Time</Label>
+            <Input
+              id="rule-end"
+              type="time"
+              value={form.endTime}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, endTime: e.target.value }))
+              }
+              data-ocid="rule-end-input"
+            />
+          </div>
         </div>
 
-        {/* Slot duration */}
-        <div className="space-y-1.5">
-          <Label>Slot Duration</Label>
-          <div className="flex gap-2">
-            {SLOT_DURATIONS.map(({ label, value }) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() =>
-                  setForm((f) => ({ ...f, slotDurationMinutes: value }))
-                }
-                data-ocid={`duration-${value}`}
-                className={`flex-1 py-2 rounded-lg border text-xs font-medium transition-smooth ${
-                  form.slotDurationMinutes === value
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card text-foreground hover:border-primary/60"
-                }`}
-              >
-                {label}
-              </button>
+        {/* Meeting types */}
+        <div className="space-y-2">
+          <Label>Meeting Types *</Label>
+          <div className="flex gap-6">
+            {(["online", "physical"] as MeetingType[]).map((t) => (
+              <div key={t} className="flex items-center gap-2">
+                <Checkbox
+                  id={`new-type-${t}`}
+                  checked={form.meetingTypes.includes(t)}
+                  onCheckedChange={() => toggleType(t)}
+                  data-ocid={`rule-type-${t}`}
+                />
+                <Label
+                  htmlFor={`new-type-${t}`}
+                  className="text-sm capitalize cursor-pointer flex items-center gap-1.5"
+                >
+                  {t === "online" ? (
+                    <Monitor className="h-3.5 w-3.5 text-primary" />
+                  ) : (
+                    <MapPin className="h-3.5 w-3.5 text-accent-foreground" />
+                  )}
+                  {t}
+                </Label>
+              </div>
             ))}
           </div>
         </div>
 
-        {/* Start */}
-        <div className="space-y-1.5">
-          <Label htmlFor="rule-start">Start Time</Label>
-          <Input
-            id="rule-start"
-            type="time"
-            value={form.startTime}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, startTime: e.target.value }))
-            }
-            data-ocid="rule-start-input"
-          />
-        </div>
+        {/* Error feedback */}
+        {isError && (
+          <div
+            className="flex items-start gap-2.5 rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive"
+            data-ocid="rule-save-error"
+          >
+            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span>
+              {error instanceof Error
+                ? error.message
+                : "Failed to save rule. Please try again."}
+            </span>
+          </div>
+        )}
 
-        {/* End */}
-        <div className="space-y-1.5">
-          <Label htmlFor="rule-end">End Time</Label>
-          <Input
-            id="rule-end"
-            type="time"
-            value={form.endTime}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, endTime: e.target.value }))
-            }
-            data-ocid="rule-end-input"
-          />
-        </div>
-      </div>
+        {/* Success flash */}
+        {saved && (
+          <div className="flex items-center gap-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+            Rule saved! Closing form…
+          </div>
+        )}
 
-      {/* Meeting types */}
-      <div className="space-y-2">
-        <Label>Meeting Types</Label>
-        <div className="flex gap-6">
-          {(["online", "physical"] as MeetingType[]).map((t) => (
-            <div key={t} className="flex items-center gap-2">
-              <Checkbox
-                id={`new-type-${t}`}
-                checked={form.meetingTypes.includes(t)}
-                onCheckedChange={() => toggleType(t)}
-                data-ocid={`rule-type-${t}`}
-              />
-              <Label
-                htmlFor={`new-type-${t}`}
-                className="text-sm capitalize cursor-pointer flex items-center gap-1.5"
-              >
-                {t === "online" ? (
-                  <Monitor className="h-3.5 w-3.5 text-primary" />
-                ) : (
-                  <MapPin className="h-3.5 w-3.5 text-accent-foreground" />
-                )}
-                {t}
-              </Label>
-            </div>
-          ))}
-        </div>
-      </div>
+        {/* ─── SAVE RULE BUTTON — full width, large, unmissable ─── */}
+        <div className="pt-2 space-y-2" data-ocid="rule-submit-section">
+          <button
+            type="submit"
+            disabled={isPending || isBackendBusy || saved}
+            data-ocid="rule-submit-btn"
+            className={`
+              w-full flex items-center justify-center gap-3
+              rounded-xl py-4 px-6
+              text-base font-semibold tracking-wide
+              transition-all duration-200
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+              shadow-md
+              ${
+                saved
+                  ? "bg-emerald-500 text-white cursor-default"
+                  : isPending || isBackendBusy
+                    ? "bg-primary/60 text-primary-foreground cursor-not-allowed opacity-80"
+                    : "bg-primary hover:bg-primary/90 active:scale-[0.98] text-primary-foreground hover:shadow-lg"
+              }
+            `}
+          >
+            {saved ? (
+              <>
+                <CheckCircle2 className="h-5 w-5" />
+                Rule Saved!
+              </>
+            ) : isPending ? (
+              <>
+                <span className="h-4 w-4 rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin" />
+                Saving Rule…
+              </>
+            ) : isBackendBusy ? (
+              <>
+                <span className="h-4 w-4 rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground animate-spin" />
+                Connecting…
+              </>
+            ) : (
+              <>
+                <Save className="h-5 w-5" />
+                Save Rule
+              </>
+            )}
+          </button>
 
-      <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          size="sm"
-          disabled={isPending}
-          data-ocid="rule-submit-btn"
-        >
-          {isPending ? "Saving…" : "Add Rule"}
-        </Button>
-      </div>
-    </form>
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full text-muted-foreground hover:text-foreground"
+            onClick={onClose}
+            data-ocid="rule-cancel-btn"
+          >
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 }
 
 // ── Availability Rules Section ─────────────────────────────────────────────────
 
-function AvailabilityRulesSection() {
+export function AvailabilityRulesSection() {
   const { data: rules = [], isLoading } = useAvailabilityRules();
   const { mutate: deleteRule, isPending: isDeleting } = useDeleteRule();
   const [showForm, setShowForm] = useState(false);
-  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  function handleDelete() {
-    if (!pendingId) return;
-    deleteRule(pendingId, {
+  function handleDelete(id: string, dayName: string) {
+    const confirmed = window.confirm(
+      `Remove the ${dayName} availability rule? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingId(id);
+    deleteRule(id, {
       onSuccess: () => {
-        toast.success("Rule removed.");
-        setPendingId(null);
+        toast.success(`${dayName} rule removed successfully.`);
+        setDeletingId(null);
       },
-      onError: () => {
-        toast.error("Failed to remove rule.");
-        setPendingId(null);
+      onError: (err) => {
+        console.error("Failed to delete rule:", err);
+        toast.error("Failed to remove rule. Please try again.");
+        setDeletingId(null);
       },
     });
   }
 
   return (
     <section aria-labelledby="rules-heading" className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Section header */}
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h2
             id="rules-heading"
@@ -280,19 +382,19 @@ function AvailabilityRulesSection() {
             Recurring time windows when meetings can be booked.
           </p>
         </div>
-        {!showForm && (
-          <Button
-            size="sm"
-            onClick={() => setShowForm(true)}
-            data-ocid="add-rule-btn"
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            Add Rule
-          </Button>
-        )}
+        <Button
+          size="sm"
+          variant={showForm ? "outline" : "default"}
+          onClick={() => setShowForm((v) => !v)}
+          data-ocid="add-rule-btn"
+          className="flex-shrink-0 mt-1"
+        >
+          <Plus className="h-4 w-4 mr-1.5" />
+          {showForm ? "Cancel" : "Add Rule"}
+        </Button>
       </div>
 
-      {/* Inline add form */}
+      {/* Inline add form — shown when showForm is true */}
       {showForm && <RuleAddPanel onClose={() => setShowForm(false)} />}
 
       {/* Rules table */}
@@ -343,112 +445,87 @@ function AvailabilityRulesSection() {
                     Meeting Types
                   </th>
                   <th className="px-4 py-3 font-medium text-muted-foreground text-right">
-                    Actions
+                    Action
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {rules.map((rule, idx) => (
-                  <tr
-                    key={rule.id}
-                    className={`border-b border-border last:border-0 hover:bg-muted/30 transition-colors ${idx % 2 === 1 ? "bg-muted/10" : ""}`}
-                    data-ocid={`rule-row-${rule.id}`}
-                  >
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      {DAYS[rule.dayOfWeek] ?? `Day ${rule.dayOfWeek}`}
-                    </td>
-                    <td className="px-4 py-3 text-foreground tabular-nums font-mono text-xs">
-                      {rule.startTime} – {rule.endTime}
-                    </td>
-                    <td className="px-4 py-3 tabular-nums text-muted-foreground">
-                      {rule.slotDurationMinutes} min
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        {rule.meetingTypes.map((t) => (
-                          <Badge
-                            key={t}
-                            variant="secondary"
-                            className="text-xs capitalize gap-1 font-normal"
-                          >
-                            {t === "online" ? (
-                              <Monitor className="h-2.5 w-2.5" />
-                            ) : (
-                              <MapPin className="h-2.5 w-2.5" />
-                            )}
-                            {t}
-                          </Badge>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive transition-colors"
-                        onClick={() => setPendingId(rule.id)}
-                        disabled={isDeleting}
-                        aria-label={`Delete ${DAYS[rule.dayOfWeek]} rule`}
-                        data-ocid={`delete-rule-btn-${rule.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {rules.map((rule, idx) => {
+                  const dayName =
+                    DAYS[rule.dayOfWeek] ?? `Day ${rule.dayOfWeek}`;
+                  const isThisDeleting = deletingId === rule.id;
+                  return (
+                    <tr
+                      key={rule.id}
+                      className={`border-b border-border last:border-0 transition-colors ${
+                        isThisDeleting ? "opacity-50" : "hover:bg-muted/30"
+                      } ${idx % 2 === 1 ? "bg-muted/10" : ""}`}
+                      data-ocid={`rule-row-${rule.id}`}
+                    >
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        {dayName}
+                      </td>
+                      <td className="px-4 py-3 text-foreground tabular-nums font-mono text-xs">
+                        {rule.startTime} – {rule.endTime}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums text-muted-foreground">
+                        {rule.slotDurationMinutes} min
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          {rule.meetingTypes.map((t) => (
+                            <Badge
+                              key={t}
+                              variant="secondary"
+                              className="text-xs capitalize gap-1 font-normal"
+                            >
+                              {t === "online" ? (
+                                <Monitor className="h-2.5 w-2.5" />
+                              ) : (
+                                <MapPin className="h-2.5 w-2.5" />
+                              )}
+                              {t}
+                            </Badge>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="h-9 gap-1.5 px-4 text-xs font-semibold"
+                          onClick={() => handleDelete(rule.id, dayName)}
+                          disabled={isDeleting || isThisDeleting}
+                          aria-label={`Delete ${dayName} rule`}
+                          data-ocid={`delete-rule-btn-${rule.id}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {isThisDeleting ? "Removing…" : "Remove"}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
-
-      {/* Delete confirmation */}
-      <AlertDialog
-        open={!!pendingId}
-        onOpenChange={(open) => !open && setPendingId(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              Remove Availability Rule
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This rule will be permanently deleted and its time slots will no
-              longer be available for new bookings. Existing confirmed bookings
-              are not affected.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-ocid="rule-cancel-delete">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-ocid="rule-confirm-delete-btn"
-            >
-              Remove Rule
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </section>
   );
 }
 
 // ── Blocked Dates Section ──────────────────────────────────────────────────────
 
-function BlockedDatesSection() {
+export function BlockedDatesSection() {
   const { data: blocked = [], isLoading } = useBlockedDates();
   const { mutate: addBlocked, isPending: isAdding } = useAddBlockedDate();
-  const { mutate: removeBlocked, isPending: isRemoving } =
-    useRemoveBlockedDate();
+  const { mutate: removeBlocked } = useRemoveBlockedDate();
 
   const [showForm, setShowForm] = useState(false);
   const [dateInput, setDateInput] = useState("");
   const [reasonInput, setReasonInput] = useState("");
-  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -462,26 +539,35 @@ function BlockedDatesSection() {
       { date: dateInput, reason: reasonInput.trim() || undefined },
       {
         onSuccess: () => {
-          toast.success("Date blocked.");
+          toast.success("Date blocked successfully.");
           setDateInput("");
           setReasonInput("");
           setShowForm(false);
         },
-        onError: () => toast.error("Failed to block date."),
+        onError: (err) => {
+          console.error("Failed to block date:", err);
+          toast.error("Failed to block date. Please try again.");
+        },
       },
     );
   }
 
-  function handleRemove() {
-    if (!pendingRemoveId) return;
-    removeBlocked(pendingRemoveId, {
+  function handleRemove(id: string, dateLabel: string) {
+    const confirmed = window.confirm(
+      `Unblock ${dateLabel}? Visitors will be able to book on this date again.`,
+    );
+    if (!confirmed) return;
+
+    setRemovingId(id);
+    removeBlocked(id, {
       onSuccess: () => {
-        toast.success("Date unblocked.");
-        setPendingRemoveId(null);
+        toast.success("Date unblocked successfully.");
+        setRemovingId(null);
       },
-      onError: () => {
-        toast.error("Failed to remove block.");
-        setPendingRemoveId(null);
+      onError: (err) => {
+        console.error("Failed to unblock date:", err);
+        toast.error("Failed to unblock date. Please try again.");
+        setRemovingId(null);
       },
     });
   }
@@ -490,8 +576,8 @@ function BlockedDatesSection() {
 
   return (
     <section aria-labelledby="blocked-heading" className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Section header */}
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h2
             id="blocked-heading"
@@ -503,81 +589,88 @@ function BlockedDatesSection() {
             Specific dates with no availability — holidays, closures, or events.
           </p>
         </div>
-        {!showForm && (
-          <Button
-            size="sm"
-            onClick={() => setShowForm(true)}
-            data-ocid="add-blocked-btn"
-          >
-            <Plus className="h-4 w-4 mr-1.5" />
-            Block Date
-          </Button>
-        )}
+        <Button
+          size="sm"
+          variant={showForm ? "outline" : "default"}
+          onClick={() => setShowForm((v) => !v)}
+          data-ocid="add-blocked-btn"
+          className="flex-shrink-0 mt-1"
+        >
+          <Plus className="h-4 w-4 mr-1.5" />
+          {showForm ? "Cancel" : "Block Date"}
+        </Button>
       </div>
 
       {/* Inline add form */}
       {showForm && (
-        <form
-          onSubmit={handleAdd}
-          className="bg-accent/5 border border-accent/30 rounded-xl p-5 space-y-4 animate-slide-up"
-        >
-          <p className="font-display font-semibold text-foreground text-sm">
-            Block a Date
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="blocked-date">Date</Label>
-              <Input
-                id="blocked-date"
-                type="date"
-                value={dateInput}
-                onChange={(e) => setDateInput(e.target.value)}
-                min={today}
-                required
-                data-ocid="blocked-date-input"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="blocked-reason">
-                Reason{" "}
-                <span className="text-muted-foreground font-normal text-xs">
-                  (optional)
-                </span>
-              </Label>
-              <Input
-                id="blocked-reason"
-                type="text"
-                placeholder="e.g. School Holiday, Staff Meeting…"
-                value={reasonInput}
-                onChange={(e) => setReasonInput(e.target.value)}
-                maxLength={120}
-                data-ocid="blocked-reason-input"
-              />
-            </div>
+        <div className="bg-card border-2 border-primary/30 rounded-xl overflow-hidden shadow-md">
+          <div className="bg-primary/10 px-5 py-3 border-b border-primary/20">
+            <p className="font-display font-semibold text-foreground text-sm flex items-center gap-2">
+              <CalendarX className="h-4 w-4 text-primary" />
+              Block a Date
+            </p>
           </div>
-          <div className="flex justify-end gap-2 pt-1">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setShowForm(false);
-                setDateInput("");
-                setReasonInput("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={isAdding}
-              data-ocid="blocked-submit-btn"
-            >
-              {isAdding ? "Blocking…" : "Block Date"}
-            </Button>
-          </div>
-        </form>
+          <form onSubmit={handleAdd} className="p-5 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="blocked-date">Date *</Label>
+                <Input
+                  id="blocked-date"
+                  type="date"
+                  value={dateInput}
+                  onChange={(e) => setDateInput(e.target.value)}
+                  min={today}
+                  required
+                  data-ocid="blocked-date-input"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="blocked-reason">
+                  Reason{" "}
+                  <span className="text-muted-foreground font-normal text-xs">
+                    (optional)
+                  </span>
+                </Label>
+                <Input
+                  id="blocked-reason"
+                  type="text"
+                  placeholder="e.g. School Holiday, Staff Meeting…"
+                  value={reasonInput}
+                  onChange={(e) => setReasonInput(e.target.value)}
+                  maxLength={120}
+                  data-ocid="blocked-reason-input"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-border">
+              <p className="text-xs text-muted-foreground">* Required field</p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowForm(false);
+                    setDateInput("");
+                    setReasonInput("");
+                  }}
+                  data-ocid="blocked-cancel-btn"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={isAdding}
+                  className="min-w-[110px]"
+                  data-ocid="blocked-submit-btn"
+                >
+                  {isAdding ? "Blocking…" : "Block Date"}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </div>
       )}
 
       {/* Blocked dates list */}
@@ -613,10 +706,13 @@ function BlockedDatesSection() {
                 day: "numeric",
               });
               const isPast = bd.date < today;
+              const isThisRemoving = removingId === bd.id;
               return (
                 <li
                   key={bd.id}
-                  className="flex items-center justify-between gap-4 px-4 py-3.5 hover:bg-muted/30 transition-colors"
+                  className={`flex items-center justify-between gap-4 px-4 py-3.5 transition-colors ${
+                    isThisRemoving ? "opacity-50" : "hover:bg-muted/30"
+                  }`}
                   data-ocid={`blocked-row-${bd.id}`}
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -651,15 +747,16 @@ function BlockedDatesSection() {
                     </div>
                   </div>
                   <Button
-                    variant="ghost"
+                    variant="destructive"
                     size="sm"
-                    className="h-8 w-8 p-0 flex-shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-                    onClick={() => setPendingRemoveId(bd.id)}
-                    disabled={isRemoving}
+                    className="h-9 gap-1.5 px-4 text-xs font-semibold flex-shrink-0"
+                    onClick={() => handleRemove(bd.id, formatted)}
+                    disabled={isThisRemoving}
                     aria-label={`Unblock ${formatted}`}
                     data-ocid={`unblock-btn-${bd.id}`}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {isThisRemoving ? "Removing…" : "Unblock"}
                   </Button>
                 </li>
               );
@@ -667,37 +764,6 @@ function BlockedDatesSection() {
           </ul>
         )}
       </div>
-
-      {/* Remove confirmation */}
-      <AlertDialog
-        open={!!pendingRemoveId}
-        onOpenChange={(open) => !open && setPendingRemoveId(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              Remove Blocked Date
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              This date will be unblocked and visitors will be able to book
-              meetings again (subject to your availability rules).
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-ocid="blocked-cancel-remove">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRemove}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-ocid="blocked-confirm-remove-btn"
-            >
-              Unblock Date
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </section>
   );
 }
@@ -713,13 +779,13 @@ export default function AdminAvailabilityPage() {
           Availability Settings
         </h1>
         <p className="text-muted-foreground mt-1.5 max-w-xl">
-          Configure when meetings can be booked at MaxFort School Rohini — set
+          Configure when meetings can be booked at Maxfort School Rohini — set
           recurring weekly rules and block specific dates for holidays or
           closures.
         </p>
       </div>
 
-      {/* Two sections separated by a divider */}
+      {/* Two sections */}
       <div className="space-y-10">
         <AvailabilityRulesSection />
         <hr className="border-border" />

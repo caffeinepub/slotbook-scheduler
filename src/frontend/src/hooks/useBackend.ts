@@ -172,13 +172,16 @@ export function useAvailabilityRules() {
 }
 
 export function useCreateRule() {
-  const { actor } = useActor(createActor);
+  const { actor, isFetching } = useActor(createActor);
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (
       rule: Omit<AvailabilityRule, "id">,
     ): Promise<AvailabilityRule> => {
-      if (!actor) throw new Error("Backend not available");
+      if (!actor || isFetching)
+        throw new Error(
+          "Backend is still connecting. Please wait a moment and try again.",
+        );
       const result = await actor.addAvailabilityRule(
         BigInt(rule.dayOfWeek),
         rule.startTime,
@@ -190,6 +193,11 @@ export function useCreateRule() {
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["availabilityRules"] }),
   });
+}
+
+export function useIsActorReady() {
+  const { actor, isFetching } = useActor(createActor);
+  return { isReady: !!actor && !isFetching, isFetching };
 }
 
 export function useDeleteRule() {

@@ -23,6 +23,6 @@ actor {
   };
 
   include AdminApiMixin();
-  include AvailabilityApiMixin(_getAdminPrincipal, rules, blockedDates);
-  include BookingApiMixin(_getAdminPrincipal, bookings, rules, blockedDates);
+  include AvailabilityApiMixin(_getAdminPrincipal, _autoInitAdmin, rules, blockedDates);
+  include BookingApiMixin(_getAdminPrincipal, _autoInitAdmin, bookings, rules, blockedDates);
 };

@@ -8,11 +8,14 @@ import AvailabilityLib "../lib/availability";
 
 mixin (
   getAdminPrincipal : () -> Principal,
+  autoInitAdmin : Principal -> (),
   bookings : List.List<BookingTypes.Booking>,
   rules : List.List<AvailabilityTypes.AvailabilityRule>,
   blockedDates : List.List<AvailabilityTypes.BlockedDate>,
 ) {
   func requireAdminBooking(caller : Principal) {
+    // Auto-initialize admin on first call if still anonymous
+    autoInitAdmin(caller);
     if (not Principal.equal(caller, getAdminPrincipal())) {
       Runtime.trap("Unauthorized: admin only");
     };

@@ -7,6 +7,13 @@ mixin () {
     adminPrincipal
   };
 
+  // Auto-initialize admin on first call if still anonymous
+  func _autoInitAdmin(caller : Principal) {
+    if (adminPrincipal.isAnonymous() and not caller.isAnonymous()) {
+      adminPrincipal := caller;
+    };
+  };
+
   // Admin: get current admin principal
   public query func getAdmin() : async Principal {
     adminPrincipal
