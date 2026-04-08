@@ -1,0 +1,23 @@
+{
+  "overview": "A meeting scheduler for MaxFort School Rohini that lets visitors book time slots for online or in-person meetings. Admins manage availability and view all upcoming bookings from a protected dashboard.",
+  "features": [
+    "Book online or physical meeting slots",
+    "Admin availability management with recurring weekly schedules",
+    "Block specific dates or time ranges",
+    "Visitor booking form with name, email, and meeting topic",
+    "Booking confirmation with location details for physical meetings",
+    "Admin dashboard with list/calendar view of all bookings",
+    "Cancel bookings with optional reason",
+    "Real-time slot availability — booked slots instantly removed from options"
+  ],
+  "category": "productivity",
+  "tags": [
+    "meeting-scheduler",
+    "booking",
+    "availability",
+    "calendar",
+    "school",
+    "admin-dashboard"
+  ],
+  "last_updated": "2026-04-07T17:36:59.674Z"
+}

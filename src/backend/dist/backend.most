@@ -1,0 +1,55 @@
+// Version: 1.0.0
+type AvailabilityRule__877058290 =
+  {
+    dayOfWeek : Nat;
+    endTime : Text;
+    id : Text;
+    meetingTypes : [MeetingType__782501343];
+    slotDurationMinutes : Nat;
+    startTime : Text
+  };
+type BlockedDate__649824510 = {date : Text; id : Text; reason : ?Text};
+type BookingStatus__10176221 = {#cancelled; #confirmed};
+type Booking__628731632 =
+  {
+    cancelReason : ?Text;
+    createdAt : Timestamp__1016684092;
+    date : Text;
+    id : Text;
+    meetingType : MeetingType__166415103;
+    status : BookingStatus__10176221;
+    timeSlot : TimeSlot__713581937;
+    topic : Text;
+    visitorEmail : Text;
+    visitorName : Text
+  };
+type MeetingType__166415103 = MeetingType__782501343;
+type MeetingType__782501343 = {#online; #physical};
+type Nat__490723111 = Nat__920180692;
+type Nat__920180692 = Nat;
+type TimeSlot__435371182 = {endTime : Text; startTime : Text};
+type TimeSlot__713581937 = TimeSlot__435371182;
+type Timestamp__1016684092 = Timestamp__342260722;
+type Timestamp__301639476 = Int;
+type Timestamp__342260722 = Timestamp__301639476;
+actor {
+  stable var adminPrincipal : Principal;
+  stable blockedDates :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?BlockedDate__649824510]];
+      var elementIndex : Nat__490723111
+    };
+  stable bookings :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?Booking__628731632]];
+      var elementIndex : Nat__490723111
+    };
+  stable rules :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?AvailabilityRule__877058290]];
+      var elementIndex : Nat__490723111
+    }
+};

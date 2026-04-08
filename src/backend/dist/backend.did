@@ -1,0 +1,66 @@
+type Timestamp = int;
+type TimeSlot = 
+ record {
+   endTime: text;
+   startTime: text;
+ };
+type MeetingType = 
+ variant {
+   online;
+   physical;
+ };
+type BookingStatus = 
+ variant {
+   cancelled;
+   confirmed;
+ };
+type Booking = 
+ record {
+   cancelReason: opt text;
+   createdAt: Timestamp;
+   date: text;
+   id: text;
+   meetingType: MeetingType;
+   status: BookingStatus;
+   timeSlot: TimeSlot;
+   topic: text;
+   visitorEmail: text;
+   visitorName: text;
+ };
+type BlockedDate = 
+ record {
+   date: text;
+   id: text;
+   reason: opt text;
+ };
+type AvailabilityRule = 
+ record {
+   dayOfWeek: nat;
+   endTime: text;
+   id: text;
+   meetingTypes: vec MeetingType;
+   slotDurationMinutes: nat;
+   startTime: text;
+ };
+service : {
+  addAvailabilityRule: (dayOfWeek: nat, startTime: text, endTime: text,
+   slotDurationMinutes: nat, meetingTypes: vec MeetingType) ->
+   (AvailabilityRule);
+  addBlockedDate: (date: text, reason: opt text) -> (BlockedDate);
+  cancelBooking: (bookingId: text, reason: opt text) -> (bool);
+  createBooking: (visitorName: text, visitorEmail: text, topic: text, date:
+   text, timeSlot: TimeSlot, meetingType: MeetingType) -> (Booking);
+  getAdmin: () -> (principal) query;
+  getAvailableSlots: (date: text, meetingType: MeetingType) ->
+   (vec TimeSlot) query;
+  getBooking: (bookingId: text) -> (opt Booking) query;
+  initializeAdmin: () -> (bool);
+  isAdmin: () -> (bool) query;
+  listAvailabilityRules: () -> (vec AvailabilityRule) query;
+  listBlockedDates: () -> (vec BlockedDate) query;
+  listBookings: () -> (vec Booking);
+  listBookingsByDate: (date: text) -> (vec Booking);
+  removeAvailabilityRule: (ruleId: text) -> (bool);
+  removeBlockedDate: (blockedDateId: text) -> (bool);
+  setAdmin: (newAdmin: principal) -> (bool);
+}
